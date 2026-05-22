@@ -104,4 +104,22 @@ async function setAvailability(req, res) {
   res.json({ is_available });
 }
 
-module.exports = { getProfile, updateProfile, changePassword, setAvailability };
+/**
+ * POST /api/users/avatar
+ * Upload or replace profile photo for any authenticated user.
+ * Expects multipart/form-data with field "photo".
+ * Security: multer fileFilter already enforces MIME type (jpg/png/webp).
+ */
+async function uploadAvatar(req, res) {
+  if (!req.file) {
+    return res.status(400).json({ error: 'File foto profil wajib diunggah (JPG, PNG, atau WebP)' });
+  }
+  const avatarUrl = `/uploads/${req.file.filename}`;
+  const result = await pool.query(
+    'UPDATE users SET avatar_url=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2 RETURNING avatar_url',
+    [avatarUrl, req.user.id]
+  );
+  res.json({ avatar_url: result.rows[0].avatar_url });
+}
+
+module.exports = { getProfile, updateProfile, changePassword, setAvailability, uploadAvatar };

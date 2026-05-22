@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import Icon from '../components/Icon';
@@ -21,6 +21,9 @@ const ROLES = [
   },
 ];
 
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 MB
+
 export default function MitraRegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -34,7 +37,39 @@ export default function MitraRegisterPage() {
   const [loading, setLoading] = useState(false);
   const { fetchMe } = useAuthStore();
 
+  // Profile photo state
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoErr, setPhotoErr] = useState('');
+  const photoInputRef = useRef(null);
+
   const set = (k, v) => { setApiErr(''); setValidErr(''); setForm((f) => ({ ...f, [k]: v })); };
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Client-side security: validate MIME type by checking both extension and browser-reported type
+    const ext = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type) || !allowedExts.includes(ext)) {
+      setPhotoErr('Hanya file gambar (JPG, PNG, WebP) yang diperbolehkan');
+      e.target.value = '';
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      return;
+    }
+    if (file.size > MAX_PHOTO_SIZE) {
+      setPhotoErr('Ukuran foto maksimal 5 MB');
+      e.target.value = '';
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      return;
+    }
+    setPhotoErr('');
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  };
 
   const handleStep1 = () => {
     if (!role) return setValidErr('Pilih salah satu peran terlebih dahulu');
@@ -44,18 +79,26 @@ export default function MitraRegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.name.trim().length < 2)   return setValidErr('Nama minimal 2 karakter');
-    if (form.password.length < 6)      return setValidErr('Password minimal 6 karakter');
+    if (form.name.trim().length < 2)       return setValidErr('Nama minimal 2 karakter');
+    if (form.password.length < 6)          return setValidErr('Password minimal 6 karakter');
     const ph = form.phone;
-    if (ph.length < 10 || ph.length > 13) return setValidErr('Nomor HP harus 10–13 digit');
+    if (ph.length < 10 || ph.length > 13)  return setValidErr('Nomor HP harus 10–13 digit');
+    if (!photoFile)                         return setValidErr('Foto profil wajib diunggah');
 
     setLoading(true); setApiErr(''); setValidErr('');
     try {
+      // Step 1: Register the account
       const { data } = await api.post('/api/auth/register-mitra', {
         ...form,
         account_type: role,
       });
       localStorage.setItem('token', data.token);
+
+      // Step 2: Upload profile photo (token is now set in localStorage, interceptor will attach it)
+      const fd = new FormData();
+      fd.append('photo', photoFile);
+      await api.post('/api/users/avatar', fd);
+
       await fetchMe();
       navigate('/dashboard');
     } catch (err) {
@@ -187,6 +230,60 @@ export default function MitraRegisterPage() {
               {(apiErr || validErr) && <div className="alert alert-error">{validErr || apiErr}</div>}
 
               <form onSubmit={handleSubmit}>
+                {/* ── Foto Profil (wajib) ── */}
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label className="label-modern">
+                    Foto Profil <span style={{ color: 'var(--err)', fontWeight: 700 }}>*</span>
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
+                    {/* Avatar preview */}
+                    <div
+                      onClick={() => photoInputRef.current?.click()}
+                      style={{
+                        width: 72, height: 72, borderRadius: '50%',
+                        border: `2px dashed ${photoErr ? 'var(--err)' : photoFile ? 'var(--brand)' : 'var(--line-strong)'}`,
+                        background: 'var(--surface-2)',
+                        display: 'grid', placeItems: 'center',
+                        cursor: 'pointer', flexShrink: 0, overflow: 'hidden',
+                        transition: 'border-color .15s',
+                      }}
+                    >
+                      {photoPreview ? (
+                        <img
+                          src={photoPreview}
+                          alt="Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <Icon name="camera" size={24} style={{ color: 'var(--ink-mute)' }} />
+                      )}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <button
+                        type="button"
+                        className="btn-modern"
+                        style={{ fontSize: 13, padding: '6px 14px', width: 'auto', marginBottom: 4 }}
+                        onClick={() => photoInputRef.current?.click()}
+                      >
+                        <Icon name="upload" size={13} /> {photoFile ? 'Ganti Foto' : 'Pilih Foto'}
+                      </button>
+                      {photoErr
+                        ? <div style={{ fontSize: 12, color: 'var(--err)', fontWeight: 600, marginTop: 2 }}>⚠️ {photoErr}</div>
+                        : photoFile
+                          ? <div style={{ fontSize: 12, color: 'var(--ok)', fontWeight: 600, marginTop: 2 }}>✓ {photoFile.name}</div>
+                          : <div className="help-modern" style={{ marginTop: 2 }}>JPG, PNG, atau WebP · Maks. 5 MB</div>
+                      }
+                    </div>
+                  </div>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                    style={{ display: 'none' }}
+                    onChange={handlePhotoChange}
+                  />
+                </div>
+
                 <div style={{ marginBottom: '1rem' }}>
                   <label className="label-modern">Nama Lengkap</label>
                   <input className="input-modern" type="text" placeholder="Contoh: Budi Santoso"

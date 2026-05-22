@@ -164,14 +164,6 @@ export default function CheckoutPage() {
             {isSurvey ? 'Checkout Survei Kost' : 'Checkout Pindahan'}
           </div>
         </div>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          fontSize: 11, color: 'var(--ok)', fontWeight: 700,
-          background: 'var(--ok-soft)', padding: '4px 10px', borderRadius: 'var(--r-pill)',
-        }}>
-          <Icon name="lock" size={11} />
-          Aman
-        </div>
       </div>
 
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '20px 16px 120px' }}>
