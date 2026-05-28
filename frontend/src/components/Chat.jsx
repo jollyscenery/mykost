@@ -3,7 +3,7 @@ import api from '../services/api';
 import useAuthStore from '../store/authStore';
 import Icon from './Icon';
 
-export default function Chat({ orderId, toUserId, orderType = 'survey' }) {
+export default function Chat({ orderId, toUserId, orderType = 'survey', isReadOnly = false }) {
   const { user } = useAuthStore();
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
@@ -75,25 +75,37 @@ export default function Chat({ orderId, toUserId, orderType = 'survey' }) {
           );
         })}
       </div>
-      <form className="mk-chat-input-row" onSubmit={send}>
-        <input
-          className="mk-input"
-          style={{ flex: 1, fontSize: 13 }}
-          placeholder="Tulis pesan..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={sending}
-          maxLength={500}
-        />
-        <button
-          className="mk-btn mk-btn-primary mk-btn-sm"
-          type="submit"
-          disabled={sending || !text.trim()}
-          style={{ flexShrink: 0 }}
-        >
-          <Icon name="arrow-right" size={15} />
-        </button>
-      </form>
+      {isReadOnly ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          padding: '10px 14px',
+          background: 'var(--surface-2)', borderRadius: 'var(--r-sm)',
+          fontSize: 13, color: 'var(--ink-mute)', fontWeight: 500,
+        }}>
+          <Icon name="lock" size={13} />
+          Chat telah ditutup — order sudah selesai
+        </div>
+      ) : (
+        <form className="mk-chat-input-row" onSubmit={send}>
+          <input
+            className="mk-input"
+            style={{ flex: 1, fontSize: 13 }}
+            placeholder="Tulis pesan..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={sending}
+            maxLength={500}
+          />
+          <button
+            className="mk-btn mk-btn-primary mk-btn-sm"
+            type="submit"
+            disabled={sending || !text.trim()}
+            style={{ flexShrink: 0 }}
+          >
+            <Icon name="arrow-right" size={15} />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

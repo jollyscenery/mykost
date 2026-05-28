@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import Icon from './Icon';
 import NotificationBell from './NotificationBell';
+import { getFileUrl } from '../services/api';
 
 // Nav item definitions per workspace
 export const USER_NAV = [
@@ -153,8 +154,13 @@ function TopBar({ user, workspace, onWorkspaceChange, capabilities }) {
               display: 'grid', placeItems: 'center',
               fontWeight: 700, fontSize: 12,
               fontFamily: 'var(--font-display)',
+              overflow: 'hidden',
+              flexShrink: 0,
             }}>
-              {user?.name?.[0] || 'U'}
+              {user?.avatar_url
+                ? <img src={getFileUrl(user.avatar_url)} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (user?.name?.[0] || 'U')
+              }
             </div>
             <span style={{ fontSize: 13, fontWeight: 600, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user?.name?.split(' ')[0] || 'Akun'}

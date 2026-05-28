@@ -74,6 +74,9 @@ function StarRating({ rating, count }) {
   );
 }
 
+const ALLOWED_AVATAR_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5 MB
+
 export default function ProfilePage() {
   const { user, fetchMe } = useAuthStore();
   const [activeTab, setActiveTab] = useState('profile');
@@ -86,6 +89,12 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [changingPw, setChangingPw] = useState(false);
   const [ratingSummary, setRatingSummary] = useState(null);
+
+  // Avatar upload state
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarErr, setAvatarErr] = useState('');
+  const [avatarMsg, setAvatarMsg] = useState('');
+  const avatarInputRef = useRef(null);
 
   // Mover vehicle & docs state
   const [moverProfile, setMoverProfile] = useState(null);
@@ -174,6 +183,39 @@ export default function ProfilePage() {
     }
   };
 
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Client-side security: validate both MIME type and extension
+    const ext = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type) || !allowedExts.includes(ext)) {
+      setAvatarErr('Hanya file gambar (JPG, PNG, WebP) yang diperbolehkan');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_AVATAR_SIZE) {
+      setAvatarErr('Ukuran foto maksimal 5 MB');
+      e.target.value = '';
+      return;
+    }
+
+    setAvatarErr(''); setAvatarMsg(''); setAvatarUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      await api.post('/api/users/avatar', fd);
+      await fetchMe();
+      setAvatarMsg('Foto profil berhasil diperbarui.');
+    } catch (error) {
+      setAvatarErr(error.response?.data?.error || 'Gagal mengunggah foto profil');
+    } finally {
+      setAvatarUploading(false);
+      e.target.value = '';
+    }
+  };
+
   const saveProfile = async (e) => {
     e.preventDefault();
     setSaving(true); setMsg(''); setErr('');
@@ -224,19 +266,63 @@ export default function ProfilePage() {
           <div className="mk-card" style={{ padding: '8px 6px' }}>
             {/* Avatar + name */}
             <div style={{ padding: '12px 10px 14px', borderBottom: '1px solid var(--line)', marginBottom: 6 }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 'var(--r-pill)',
-                background: 'var(--accent-soft)', color: 'var(--accent)',
-                display: 'grid', placeItems: 'center',
-                fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18,
-                marginBottom: 8,
-              }}>
-                {user.name?.[0] || 'U'}
+              {/* Avatar with change button overlay */}
+              <div style={{ position: 'relative', width: 56, height: 56, marginBottom: 8 }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: 'var(--accent-soft)', color: 'var(--accent)',
+                  display: 'grid', placeItems: 'center', overflow: 'hidden',
+                  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 20,
+                  border: '2px solid var(--line)',
+                }}>
+                  {user.avatar_url ? (
+                    <img
+                      src={getFileUrl(user.avatar_url)}
+                      alt="Avatar"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    user.name?.[0] || 'U'
+                  )}
+                </div>
+                {/* Overlay change button */}
+                <button
+                  type="button"
+                  title="Ganti foto profil"
+                  disabled={avatarUploading}
+                  onClick={() => avatarInputRef.current?.click()}
+                  style={{
+                    position: 'absolute', bottom: -2, right: -2,
+                    width: 22, height: 22, borderRadius: '50%',
+                    background: 'var(--brand)', color: '#fff',
+                    border: '2px solid var(--surface)',
+                    display: 'grid', placeItems: 'center',
+                    cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  {avatarUploading
+                    ? <div className="mk-spinner" style={{ width: 10, height: 10, borderWidth: 2, borderColor: 'rgba(255,255,255,.3)', borderTopColor: '#fff' }} />
+                    : <Icon name="camera" size={10} />
+                  }
+                </button>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={handleAvatarChange}
+                />
               </div>
               <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>{user.name}</div>
               <span className="mk-pill mk-pill-info" style={{ marginTop: 5, fontSize: 11 }}>
                 {roleLabel}
               </span>
+              {avatarMsg && (
+                <div style={{ fontSize: 11, color: 'var(--ok)', fontWeight: 600, marginTop: 4 }}>✓ {avatarMsg}</div>
+              )}
+              {avatarErr && (
+                <div style={{ fontSize: 11, color: 'var(--err)', fontWeight: 600, marginTop: 4 }}>⚠️ {avatarErr}</div>
+              )}
 
               {/* Rating for agents/movers */}
               {isProvider && ratingSummary && ratingSummary.count > 0 && (
@@ -315,6 +401,47 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+
+              {/* ── Foto Profil card ── */}
+              <Section title="Foto Profil" sub="Ditampilkan kepada pengguna dan mitra lainnya.">
+                {avatarMsg && <div className="mk-alert mk-alert-ok" style={{ marginBottom: 16 }}>{avatarMsg}</div>}
+                {avatarErr && <div className="mk-alert mk-alert-err" style={{ marginBottom: 16 }}>{avatarErr}</div>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                  {/* Current avatar preview */}
+                  <div style={{
+                    width: 80, height: 80, borderRadius: '50%',
+                    background: 'var(--accent-soft)', color: 'var(--accent)',
+                    display: 'grid', placeItems: 'center', overflow: 'hidden',
+                    fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 28,
+                    border: '2px solid var(--line)', flexShrink: 0,
+                  }}>
+                    {user.avatar_url ? (
+                      <img
+                        src={getFileUrl(user.avatar_url)}
+                        alt="Foto profil"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      user.name?.[0] || 'U'
+                    )}
+                  </div>
+                  <div>
+                    <button
+                      type="button"
+                      className="mk-btn mk-btn-primary"
+                      style={{ fontSize: 13, marginBottom: 6 }}
+                      disabled={avatarUploading}
+                      onClick={() => avatarInputRef.current?.click()}
+                    >
+                      {avatarUploading
+                        ? <><div className="mk-spinner" style={{ width: 14, height: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,.3)', borderTopColor: '#fff' }} /> Mengunggah...</>
+                        : <><Icon name="camera" size={14} /> {user.avatar_url ? 'Ganti Foto Profil' : 'Upload Foto Profil'}</>
+                      }
+                    </button>
+                    <div style={{ fontSize: 12, color: 'var(--ink-mute)' }}>JPG, PNG, atau WebP · Maks. 5 MB</div>
+                  </div>
+                </div>
+              </Section>
 
               <Section title="Informasi Pribadi" sub="Nama dan kontak yang ditampilkan ke mitra.">
                 {msg && <div className="mk-alert mk-alert-ok" style={{ marginBottom: 16 }}>{msg}</div>}

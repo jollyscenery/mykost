@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import api from '../services/api';
+import api, { getFileUrl } from '../services/api';
 import MapPicker from '../components/MapPicker';
 import KotaSelect from '../components/KotaSelect';
 import LocationSearchInput from '../components/LocationSearchInput';
@@ -41,6 +41,54 @@ const STATUS_LABEL = {
 function StatusPill({ status }) {
   const cfg = STATUS_LABEL[status] || { cls: 'mk-pill mk-pill-info', label: status };
   return <span className={cfg.cls}>{cfg.label}</span>;
+}
+
+const fmtDatetime = (d) => d
+  ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  : '—';
+
+/** Mini avatar + name + star rating for the assigned surveyor / mover */
+function ProviderBadge({ avatarUrl, name, rating, ratingCount, role }) {
+  const initials = name?.[0]?.toUpperCase() || '?';
+  const filledStars = Math.round(Number(rating) || 0);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+      {/* Avatar */}
+      <div style={{
+        width: 32, height: 32, borderRadius: '50%',
+        background: 'var(--brand-soft)', color: 'var(--brand)',
+        display: 'grid', placeItems: 'center', overflow: 'hidden',
+        fontWeight: 700, fontSize: 13, flexShrink: 0,
+        fontFamily: 'var(--font-display)',
+        border: '1.5px solid var(--line)',
+      }}>
+        {avatarUrl
+          ? <img src={getFileUrl(avatarUrl)} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : initials
+        }
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.2 }}>
+          {role}: <strong style={{ color: 'var(--ink)' }}>{name}</strong>
+        </div>
+        {rating && Number(ratingCount) > 0 ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
+            {[1,2,3,4,5].map((s) => (
+              <Icon key={s} name="star" size={11}
+                style={{ color: s <= filledStars ? '#f59e0b' : 'var(--line-strong)', fill: s <= filledStars ? '#f59e0b' : 'none' }}
+              />
+            ))}
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink)', marginLeft: 2 }}>
+              {Number(rating).toFixed(1)}
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--ink-mute)' }}>({ratingCount})</span>
+          </div>
+        ) : (
+          <div style={{ fontSize: 11, color: 'var(--ink-mute)', marginTop: 2 }}>Belum ada ulasan</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const SURVEY_HISTORY_STATUS = ['completed', 'cancelled', 'refunded'];
@@ -519,10 +567,15 @@ export default function UserDashboard() {
                       <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, margin: 0, letterSpacing: '-.01em' }}>
                         {order.kost_name}
                       </h3>
+                      {/* Provider badge: avatar + rating (only when agent is assigned) */}
                       {order.agent_name && (
-                        <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-soft)' }}>
-                          Surveyor: <strong style={{ color: 'var(--ink)' }}>{order.agent_name}</strong>
-                        </div>
+                        <ProviderBadge
+                          avatarUrl={order.agent_avatar_url}
+                          name={order.agent_name}
+                          rating={order.agent_rating}
+                          ratingCount={order.agent_rating_count}
+                          role="Surveyor"
+                        />
                       )}
                       {order.status === 'pending_payment' && (
                         <div className="mk-row" style={{ gap: 5, marginTop: 6, fontSize: 13, color: 'var(--warn)', fontWeight: 600 }}>
@@ -530,6 +583,11 @@ export default function UserDashboard() {
                           Belum dibayar — {rp(order.price || PRICE)}
                         </div>
                       )}
+                      {/* Order creation time */}
+                      <div className="mk-row" style={{ gap: 5, marginTop: 6, fontSize: 12, color: 'var(--ink-mute)' }}>
+                        <Icon name="calendar" size={12} />
+                        {fmtDatetime(order.created_at)}
+                      </div>
                     </div>
                     <StatusPill status={order.status} />
                   </div>
@@ -872,11 +930,21 @@ export default function UserDashboard() {
                         <div style={{ marginTop: 5, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, color: 'var(--brand)' }}>
                           {rp(o.estimated_price)}
                         </div>
+                        {/* Provider badge: mover avatar + rating */}
                         {o.mover_name && (
-                          <div style={{ marginTop: 5, fontSize: 13, color: 'var(--ink-soft)' }}>
-                            Mover: <strong>{o.mover_name}</strong>
-                          </div>
+                          <ProviderBadge
+                            avatarUrl={o.mover_avatar_url}
+                            name={o.mover_name}
+                            rating={o.mover_rating}
+                            ratingCount={o.mover_rating_count}
+                            role="Mover"
+                          />
                         )}
+                        {/* Order creation time */}
+                        <div className="mk-row" style={{ gap: 5, marginTop: 6, fontSize: 12, color: 'var(--ink-mute)' }}>
+                          <Icon name="calendar" size={12} />
+                          {fmtDatetime(o.created_at)}
+                        </div>
                         {o.status === 'INVALID' && o.invalid_reason && (
                           <div className="mk-row" style={{ gap: 5, marginTop: 5, fontSize: 12, color: 'var(--err)', fontWeight: 600 }}>
                             <Icon name="x-circle" size={13} />{o.invalid_reason}

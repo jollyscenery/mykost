@@ -159,6 +159,9 @@ export default function SurveyOrderDetailPage() {
   const hasSurveyorCap = (capabilities || []).some(c => c.capability === 'surveyor' && c.status === 'active');
   const isAssignedAgent = (user.role === 'agent' || hasSurveyorCap) && order.agent_id === user.id;
 
+  const SURVEY_TERMINAL = ['completed', 'refunded', 'cancelled'];
+  const chatIsReadOnly  = SURVEY_TERMINAL.includes(order.status);
+
   const chatPartnerId = (() => {
     if (['pending_payment', 'finding_agent', 'refunded', 'cancelled'].includes(order.status)) return null;
     if (user.role === 'user') return order.agent_id;
@@ -440,7 +443,7 @@ export default function SurveyOrderDetailPage() {
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>Chat</div>
           </div>
           {chatPartnerId ? (
-            <Chat orderId={id} toUserId={chatPartnerId} orderType="survey" />
+            <Chat orderId={id} toUserId={chatPartnerId} orderType="survey" isReadOnly={chatIsReadOnly} />
           ) : (
             <div className="mk-empty" style={{ padding: '2rem 0' }}>
               <div className="mk-empty-icon"><Icon name="message" size={36} /></div>

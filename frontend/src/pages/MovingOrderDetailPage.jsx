@@ -789,7 +789,12 @@ export default function MovingOrderDetailPage() {
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>Chat</div>
           </div>
           {otherUser ? (
-            <Chat orderId={id} toUserId={otherUser} orderType="moving" />
+            <Chat
+              orderId={id}
+              toUserId={otherUser}
+              orderType="moving"
+              isReadOnly={['COMPLETED', 'CANCELLED', 'INVALID'].includes(order?.status)}
+            />
           ) : (
             <div className="mk-empty" style={{ padding: '2rem 0' }}>
               <div className="mk-empty-icon"><Icon name="message" size={36} /></div>
