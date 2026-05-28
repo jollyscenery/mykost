@@ -114,7 +114,7 @@ export default function MitraRegisterPage() {
     <div className="auth-shell">
       <aside className="auth-shell-hero">
         <div>
-          <div className="hero-brand">MyKost</div>
+          <img src="/logo.png" alt="MyKost" style={{ height: 72, width: 'auto' }} />
         </div>
         <div>
           <h1>Bergabung sebagai Mitra MyKost.</h1>

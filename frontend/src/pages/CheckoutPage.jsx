@@ -252,7 +252,7 @@ export default function CheckoutPage() {
         </div>
 
         {/* Price Breakdown */}
-        <div className="mk-card" style={{ padding: 20, marginBottom: 12 }}>
+        <div style={{ marginBottom: 12 }}>
           <SectionLabel icon="tag" label="Rincian Harga" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {isSurvey ? (

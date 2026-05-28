@@ -26,7 +26,7 @@ export default function RegisterPage() {
     <div className="auth-shell">
       <aside className="auth-shell-hero">
         <div>
-          <div className="hero-brand">MyKost</div>
+          <img src="/logo.png" alt="MyKost" style={{ height: 72, width: 'auto' }} />
         </div>
         <div>
           <h1>Mulai dengan satu akun. Tumbuh sesuai kebutuhan.</h1>
