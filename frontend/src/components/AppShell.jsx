@@ -79,27 +79,10 @@ function TopBar({ user, workspace, onWorkspaceChange, capabilities }) {
     }}>
       {/* Logo */}
       <div className="mk-row" style={{ gap: 10 }}>
-        <div style={{
-          width: 32, height: 32,
-          borderRadius: 'var(--r-sm)',
-          background: 'var(--brand)', color: '#fff',
-          display: 'grid', placeItems: 'center',
-          fontWeight: 800, fontSize: 13,
-          letterSpacing: '.01em',
-          fontFamily: 'var(--font-display)',
-        }}>
-          MK
-        </div>
-        <div style={{
-          fontFamily: 'var(--font-display)',
-          fontWeight: 800, fontSize: 17,
-          letterSpacing: '-.02em',
-        }}>
-          MyKost
-          <span style={{ color: 'var(--ink-mute)', fontWeight: 500, fontSize: 13, marginLeft: 8 }}>
-            {WORKSPACE_LABEL[workspace] || 'Dashboard'}
-          </span>
-        </div>
+        <img src="/logo.png" alt="MyKost" style={{ height: 36, width: 'auto' }} />
+        <span style={{ color: 'var(--ink-mute)', fontWeight: 500, fontSize: 13 }}>
+          {WORKSPACE_LABEL[workspace] || 'Dashboard'}
+        </span>
       </div>
 
       {/* Right side */}

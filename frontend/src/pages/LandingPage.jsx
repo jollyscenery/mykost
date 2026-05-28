@@ -7,8 +7,7 @@ export default function LandingPage() {
       {/* ── Nav ── */}
       <nav className="lp-nav">
         <div className="lp-nav__brand">
-          <div className="lp-nav__brand-icon">MK</div>
-          MyKost
+          <img src="/logo.png" alt="MyKost" style={{ height: 38, width: 'auto' }} />
         </div>
         <div className="lp-nav__links">
           <a href="#services">Layanan</a>
@@ -22,8 +21,7 @@ export default function LandingPage() {
         {/* Left — copy */}
         <div className="lp-hero__left">
           <div className="lp-hero__logo">
-            <div className="lp-hero__logo-icon">MK</div>
-            MyKost
+            <img src="/logo.png" alt="MyKost" style={{ height: 64, width: 'auto' }} />
           </div>
 
           <div className="lp-hero__copy">
