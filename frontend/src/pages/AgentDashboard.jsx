@@ -188,28 +188,35 @@ function JobCard({ order, onAccept, accepting, onView, isMyOrder, isBusy }) {
       </div>
 
       <div className="mk-row" style={{ gap: 8, justifyContent: 'flex-end', paddingTop: 12, borderTop: '1px solid var(--line)' }}>
-        <button className="mk-btn mk-btn-ghost mk-btn-sm" onClick={() => {
-          if (!isMyOrder) { alert('Terima order terlebih dahulu untuk mengakses detail.'); return; }
-          onView(order.id);
-        }}>
-          Detail
-        </button>
-        {isMyOrder ? (
-          <button className="mk-btn mk-btn-primary mk-btn-sm" onClick={() => onView(order.id)}>
-            {order.status === 'assigned' ? (
-              <><Icon name="upload" size={14} /> Kirim Hasil</>
-            ) : 'Lihat Detail'}
-          </button>
+        {!isMyOrder ? (
+          /* Available order: locked detail preview + accept action */
+          <>
+            <button className="mk-btn mk-btn-ghost mk-btn-sm" onClick={() => alert('Terima order terlebih dahulu untuk mengakses detail.')}>
+              Detail
+            </button>
+            <button
+              className="mk-btn mk-btn-primary mk-btn-sm"
+              onClick={() => !isBusy && onAccept(order.id)}
+              disabled={accepting === order.id || isBusy}
+              title={isBusy ? 'Selesaikan order aktif dulu sebelum menerima order baru' : ''}
+              style={isBusy ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+            >
+              <Icon name="check" size={14} />
+              {accepting === order.id ? 'Menerima...' : isBusy ? 'Sedang Bertugas' : 'Terima'}
+            </button>
+          </>
+        ) : order.status === 'assigned' ? (
+          /* Active survey: detail + submit result */
+          <>
+            <button className="mk-btn mk-btn-ghost mk-btn-sm" onClick={() => onView(order.id)}>Detail</button>
+            <button className="mk-btn mk-btn-primary mk-btn-sm" onClick={() => onView(order.id)}>
+              <Icon name="upload" size={14} /> Kirim Hasil
+            </button>
+          </>
         ) : (
-          <button
-            className="mk-btn mk-btn-primary mk-btn-sm"
-            onClick={() => !isBusy && onAccept(order.id)}
-            disabled={accepting === order.id || isBusy}
-            title={isBusy ? 'Selesaikan order aktif dulu sebelum menerima order baru' : ''}
-            style={isBusy ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-          >
-            <Icon name="check" size={14} />
-            {accepting === order.id ? 'Menerima...' : isBusy ? 'Sedang Bertugas' : 'Terima'}
+          /* History / waiting for user — single action */
+          <button className="mk-btn mk-btn-ghost mk-btn-sm" onClick={() => onView(order.id)}>
+            Lihat Detail
           </button>
         )}
       </div>
@@ -217,8 +224,8 @@ function JobCard({ order, onAccept, accepting, onView, isMyOrder, isBusy }) {
   );
 }
 
-// Statuses that belong in the history section (done / terminal)
-const AGENT_HISTORY_STATUS = ['completed', 'refunded', 'cancelled'];
+// Statuses that belong in the history section (agent's work is fully done)
+const AGENT_HISTORY_STATUS = ['result_submitted', 'completed', 'refunded', 'cancelled'];
 
 function HistoryDivider({ count, expanded, onToggle }) {
   return (

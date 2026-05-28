@@ -8,12 +8,15 @@ const sendSchema = Joi.object({
   moving_order_id: Joi.string().uuid().allow(null),
 });
 
+const TERMINAL_SURVEY = ['completed', 'refunded', 'cancelled'];
+const TERMINAL_MOVING = ['COMPLETED', 'CANCELLED', 'INVALID'];
+
 async function getOrderParticipants(orderId, type) {
   if (type === 'moving') {
-    const r = await pool.query('SELECT user_id, mover_id FROM moving_orders WHERE id=$1', [orderId]);
+    const r = await pool.query('SELECT user_id, mover_id, status FROM moving_orders WHERE id=$1', [orderId]);
     return r.rows[0] || null;
   }
-  const r = await pool.query('SELECT user_id, agent_id FROM survey_orders WHERE id=$1', [orderId]);
+  const r = await pool.query('SELECT user_id, agent_id, status FROM survey_orders WHERE id=$1', [orderId]);
   return r.rows[0] || null;
 }
 
@@ -81,6 +84,12 @@ async function sendMessage(req, res) {
   if (!isParticipant(order, req.user.id, type)) return res.status(403).json({ error: 'Access denied' });
   if (!isParticipant(order, to_user_id, type)) {
     return res.status(403).json({ error: 'Recipient is not a participant in this order' });
+  }
+
+  // Block sending messages on terminal (completed/cancelled) orders
+  const terminalStatuses = type === 'moving' ? TERMINAL_MOVING : TERMINAL_SURVEY;
+  if (terminalStatuses.includes(order.status)) {
+    return res.status(403).json({ error: 'Chat telah ditutup — order sudah selesai.' });
   }
 
   const result = await pool.query(
