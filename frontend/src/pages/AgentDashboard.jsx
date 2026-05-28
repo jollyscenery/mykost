@@ -217,6 +217,32 @@ function JobCard({ order, onAccept, accepting, onView, isMyOrder, isBusy }) {
   );
 }
 
+// Statuses that belong in the history section (done / terminal)
+const AGENT_HISTORY_STATUS = ['completed', 'refunded', 'cancelled'];
+
+function HistoryDivider({ count, expanded, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="mk-row"
+      style={{
+        gap: 10, alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 14px', marginTop: 4, marginBottom: 4,
+        background: 'var(--surface-2)', border: '1px solid var(--line)',
+        borderRadius: 'var(--r-md)', cursor: 'pointer', width: '100%',
+        fontFamily: 'var(--font-body)',
+      }}
+    >
+      <span className="mk-row" style={{ gap: 8, color: 'var(--ink-soft)', fontSize: 13, fontWeight: 600 }}>
+        <Icon name="archive" size={14} />
+        Riwayat ({count})
+      </span>
+      <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={14} style={{ color: 'var(--ink-mute)' }} />
+    </button>
+  );
+}
+
 export default function AgentDashboard() {
   const navigate = useNavigate();
   const { user, fetchMe } = useAuthStore();
@@ -237,6 +263,7 @@ export default function AgentDashboard() {
   const [accepting, setAccepting] = useState(null);
   const [availToggleLoading, setAvailToggleLoading] = useState(false);
   const [ratingSummary, setRatingSummary] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -291,6 +318,7 @@ export default function AgentDashboard() {
     }
   };
 
+  const activeOrders = myOrders.filter((o) => !AGENT_HISTORY_STATUS.includes(o.status));
   const activeCount  = myOrders.filter((o) => o.status === 'assigned').length;
   const doneCount    = myOrders.filter((o) => o.status === 'completed').length;
   const totalComm    = commissions.reduce((s, c) => s + (c.amount || 0), 0);
@@ -389,7 +417,7 @@ export default function AgentDashboard() {
           <div className="mk-tabs">
             {[
               { id: 'available', label: `Tersedia (${offline ? '—' : available.length})` },
-              { id: 'my-orders', label: `Pekerjaan Saya (${myOrders.length})` },
+              { id: 'my-orders', label: `Pekerjaan Saya (${activeOrders.length})` },
               { id: 'commissions', label: 'Komisi' },
             ].map((t) => (
               <button
@@ -446,29 +474,60 @@ export default function AgentDashboard() {
           </div>
         )}
 
-        {/* My orders */}
-        {tab === 'my-orders' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {myOrders.length === 0 ? (
-              <div className="mk-empty">
-                <div className="mk-empty-icon"><Icon name="clipboard" size={44} /></div>
-                <div className="mk-empty-title">Belum ada pekerjaan</div>
-                <div className="mk-empty-sub">Terima order dari tab "Tersedia" untuk mulai.</div>
-              </div>
-            ) : (
-              myOrders.map((order) => (
-                <JobCard
-                  key={order.id}
-                  order={order}
-                  onAccept={acceptOrder}
-                  accepting={accepting}
-                  onView={(id) => navigate(`/survey-orders/${id}`)}
-                  isMyOrder
-                />
-              ))
-            )}
-          </div>
-        )}
+        {/* My orders — split active vs. history */}
+        {tab === 'my-orders' && (() => {
+          const activeOrders  = myOrders.filter((o) => !AGENT_HISTORY_STATUS.includes(o.status));
+          const historyOrders = myOrders.filter((o) =>  AGENT_HISTORY_STATUS.includes(o.status));
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {myOrders.length === 0 ? (
+                <div className="mk-empty">
+                  <div className="mk-empty-icon"><Icon name="clipboard" size={44} /></div>
+                  <div className="mk-empty-title">Belum ada pekerjaan</div>
+                  <div className="mk-empty-sub">Terima order dari tab "Tersedia" untuk mulai.</div>
+                </div>
+              ) : (
+                <>
+                  {activeOrders.length === 0 && historyOrders.length > 0 && (
+                    <div style={{ fontSize: 13, color: 'var(--ink-mute)', textAlign: 'center', padding: '12px 0' }}>
+                      Tidak ada order aktif. Riwayat tersimpan di bawah.
+                    </div>
+                  )}
+                  {activeOrders.map((order) => (
+                    <JobCard
+                      key={order.id}
+                      order={order}
+                      onAccept={acceptOrder}
+                      accepting={accepting}
+                      onView={(id) => navigate(`/survey-orders/${id}`)}
+                      isMyOrder
+                    />
+                  ))}
+                  {historyOrders.length > 0 && (
+                    <>
+                      <HistoryDivider
+                        count={historyOrders.length}
+                        expanded={showHistory}
+                        onToggle={() => setShowHistory((v) => !v)}
+                      />
+                      {showHistory && historyOrders.map((order) => (
+                        <div key={order.id} style={{ opacity: 0.72 }}>
+                          <JobCard
+                            order={order}
+                            onAccept={acceptOrder}
+                            accepting={accepting}
+                            onView={(id) => navigate(`/survey-orders/${id}`)}
+                            isMyOrder
+                          />
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Commissions */}
         {tab === 'commissions' && (

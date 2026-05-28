@@ -216,6 +216,37 @@ function JobCard({ order, onAccept, accepting, isMyJob, isBusy }) {
   );
 }
 
+const MOVER_HISTORY_STATUS = ['COMPLETED', 'CANCELLED', 'INVALID'];
+
+function HistoryDivider({ count, open, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        width: '100%', padding: '10px 14px',
+        background: 'var(--surface-2)', border: '1px solid var(--line)',
+        borderRadius: 'var(--r-sm)', cursor: 'pointer',
+        fontFamily: 'var(--font-body)',
+      }}
+    >
+      <Icon
+        name="chevron-right"
+        size={16}
+        style={{
+          color: 'var(--ink-mute)',
+          transform: open ? 'rotate(90deg)' : 'none',
+          transition: 'transform .15s',
+          flexShrink: 0,
+        }}
+      />
+      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-soft)', flex: 1, textAlign: 'left' }}>
+        Riwayat ({count} job)
+      </span>
+    </button>
+  );
+}
+
 export default function MoverDashboard() {
   const navigate = useNavigate();
   const { user, fetchMe } = useAuthStore();
@@ -236,6 +267,7 @@ export default function MoverDashboard() {
   const [availToggleLoading, setAvailToggleLoading] = useState(false);
   const [ratingSummary, setRatingSummary] = useState(null);
   const [moverProfile, setMoverProfile] = useState(null);
+  const [showJobsHistory, setShowJobsHistory] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -300,6 +332,8 @@ export default function MoverDashboard() {
   const summary = earnings?.summary || {};
   const isAvailable = user?.is_available !== false;
   const isBusy      = isAvailable && myJobs.some((j) => ['ACCEPTED', 'ON_GOING'].includes(j.status));
+  const activeJobs  = myJobs.filter((j) => !MOVER_HISTORY_STATUS.includes(j.status));
+  const historyJobs = myJobs.filter((j) => MOVER_HISTORY_STATUS.includes(j.status));
   const profileIncomplete = moverProfile !== null && (
     !moverProfile.vehicle_types?.length ||
     !moverProfile.plate_number ||
@@ -444,7 +478,7 @@ export default function MoverDashboard() {
           <div className="mk-tabs">
             {[
               { id: 'available', label: `Job Tersedia (${offline ? '—' : available.length})` },
-              { id: 'my-jobs',   label: `Job Saya (${myJobs.length})` },
+              { id: 'my-jobs',   label: `Job Saya (${activeJobs.length})` },
               { id: 'earnings',  label: 'Penghasilan' },
             ].map((t) => (
               <button
@@ -492,21 +526,40 @@ export default function MoverDashboard() {
           </div>
         )}
 
-        {tab === 'my-jobs' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {myJobs.length === 0 ? (
-              <div className="mk-empty">
-                <div className="mk-empty-icon"><Icon name="package" size={44} /></div>
-                <div className="mk-empty-title">Belum ada job aktif</div>
-                <div className="mk-empty-sub">Ambil job dari tab "Job Tersedia" untuk mulai bekerja.</div>
-              </div>
-            ) : (
-              myJobs.map((order) => (
+        {tab === 'my-jobs' && (() => {
+          if (myJobs.length === 0) return (
+            <div className="mk-empty">
+              <div className="mk-empty-icon"><Icon name="package" size={44} /></div>
+              <div className="mk-empty-title">Belum ada job aktif</div>
+              <div className="mk-empty-sub">Ambil job dari tab "Job Tersedia" untuk mulai bekerja.</div>
+            </div>
+          );
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {activeJobs.length === 0 && (
+                <div className="mk-empty" style={{ padding: '1.2rem 0' }}>
+                  <div className="mk-empty-title">Tidak ada job aktif</div>
+                  <div className="mk-empty-sub">Job yang sedang berjalan akan muncul di sini.</div>
+                </div>
+              )}
+              {activeJobs.map((order) => (
                 <JobCard key={order.id} order={order} onAccept={acceptOrder} accepting={accepting} isMyJob />
-              ))
-            )}
-          </div>
-        )}
+              ))}
+              {historyJobs.length > 0 && (
+                <>
+                  <HistoryDivider
+                    count={historyJobs.length}
+                    open={showJobsHistory}
+                    onToggle={() => setShowJobsHistory((v) => !v)}
+                  />
+                  {showJobsHistory && historyJobs.map((order) => (
+                    <JobCard key={order.id} order={order} onAccept={acceptOrder} accepting={accepting} isMyJob />
+                  ))}
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {tab === 'earnings' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
