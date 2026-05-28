@@ -1,6 +1,7 @@
 const pool = require('../db/pool');
 const notify = require('../utils/notify');
 const { creditWallet } = require('./walletController');
+const { calculateCommission, PLATFORM_COMMISSION_RATE } = require('../utils/commission');
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -253,27 +254,56 @@ async function finalizeOrder(req, res) {
     return res.status(400).json({ error: 'Order tidak dalam status menunggu keputusan' });
   }
 
-  const updated = await pool.query(
-    `UPDATE survey_orders SET status='completed', updated_at=CURRENT_TIMESTAMP WHERE id=$1 RETURNING *`,
-    [id]
-  );
-  const note = action === 'proceed_moving'
-    ? 'User puas dengan hasil survei, lanjut ke order pindahan.'
-    : 'User menutup order.';
-  await addHistory(id, 'completed', note, req.user.id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  // Beri tahu agent bahwa order sudah ditutup user
-  if (order.agent_id) {
-    const title = action === 'proceed_moving'
-      ? 'User lanjut ke pindahan'
-      : 'Order survei ditutup';
-    const body = action === 'proceed_moving'
-      ? `User puas dengan hasil survei "${order.kost_name}" dan akan memesan layanan pindahan.`
-      : `User menutup order survei "${order.kost_name}".`;
-    await notify(order.agent_id, 'survey_finalized', title, body, id, 'survey');
+    const updated = await client.query(
+      `UPDATE survey_orders SET status='completed', updated_at=CURRENT_TIMESTAMP WHERE id=$1 RETURNING *`,
+      [id]
+    );
+    const note = action === 'proceed_moving'
+      ? 'User puas dengan hasil survei, lanjut ke order pindahan.'
+      : 'User menutup order.';
+    await addHistory(id, 'completed', note, req.user.id);
+
+    // Credit wallet agent setelah potong komisi platform
+    if (order.agent_id) {
+      const { grossAmount, commission, netAmount, rate } = calculateCommission(parseInt(order.price || 75000));
+
+      await creditWallet(
+        client, order.agent_id, netAmount,
+        'survey_earnings', id,
+        `Pendapatan survei "${order.kost_name}" (setelah komisi platform ${Math.round(rate * 100)}%)`
+      );
+
+      await client.query(
+        `INSERT INTO platform_revenue (order_type, order_id, gross_amount, commission, rate)
+         VALUES ('survey', $1, $2, $3, $4)`,
+        [id, grossAmount, commission, rate]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // Beri tahu agent bahwa order sudah ditutup user
+    if (order.agent_id) {
+      const title = action === 'proceed_moving'
+        ? 'User lanjut ke pindahan'
+        : 'Order survei ditutup';
+      const body = action === 'proceed_moving'
+        ? `User puas dengan hasil survei "${order.kost_name}" dan akan memesan layanan pindahan.`
+        : `User menutup order survei "${order.kost_name}".`;
+      await notify(order.agent_id, 'survey_finalized', title, body, id, 'survey');
+    }
+
+    res.json({ order: updated.rows[0], action });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
-
-  res.json({ order: updated.rows[0], action });
 }
 
 // ─── shared ──────────────────────────────────────────────────────────────────
@@ -328,22 +358,34 @@ async function getOrderById(req, res) {
 
 async function getAgentCommissions(req, res) {
   const result = await pool.query(
-    `SELECT id, kost_name, price, created_at
-     FROM survey_orders
-     WHERE agent_id = $1 AND status = 'completed'
-     ORDER BY created_at DESC`,
+    `SELECT so.id, so.kost_name, so.price, so.created_at,
+            pr.commission, pr.rate
+     FROM survey_orders so
+     LEFT JOIN platform_revenue pr
+       ON pr.order_id = so.id::text AND pr.order_type = 'survey'
+     WHERE so.agent_id = $1 AND so.status = 'completed'
+     ORDER BY so.created_at DESC`,
     [req.user.id]
   );
 
-  const list = result.rows.map((row) => ({
-    id: row.id,
-    orderId: row.id,
-    date: row.created_at,
-    status: 'Paid',
-    amount: row.price,
-  }));
+  const list = result.rows.map((row) => {
+    const gross = parseInt(row.price || 75000);
+    const commissionRate = row.rate !== null ? parseFloat(row.rate) : PLATFORM_COMMISSION_RATE;
+    const commission = row.commission !== null ? parseInt(row.commission) : Math.round(gross * commissionRate);
+    const net = gross - commission;
+    return {
+      id: row.id,
+      orderId: row.id,
+      date: row.created_at,
+      status: 'Paid',
+      amount: net,
+      gross_amount: gross,
+      commission,
+      commission_rate: commissionRate,
+    };
+  });
 
-  res.json({ list });
+  res.json({ list, commission_rate: PLATFORM_COMMISSION_RATE });
 }
 
 module.exports = {
