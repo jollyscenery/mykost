@@ -367,8 +367,13 @@ async function getEarnings(req, res) {
 async function getUserOrders(req, res) {
   const result = await pool.query(
     `SELECT mo.*,
-       mv.name  AS mover_name,
-       mv.phone AS mover_phone
+       mv.name        AS mover_name,
+       mv.phone       AS mover_phone,
+       mv.avatar_url  AS mover_avatar_url,
+       (SELECT ROUND(AVG(r.rating)::numeric, 1)
+        FROM reviews r WHERE r.reviewee_id = mo.mover_id) AS mover_rating,
+       (SELECT COUNT(*)
+        FROM reviews r WHERE r.reviewee_id = mo.mover_id) AS mover_rating_count
      FROM moving_orders mo
      LEFT JOIN users mv ON mv.id = mo.mover_id
      WHERE mo.user_id = $1

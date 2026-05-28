@@ -12,6 +12,9 @@ const fmtMonth = (ym) => {
 };
 
 const fmt = (d) => d ? new Date(d).toLocaleDateString('id-ID') : '—';
+const fmtDatetime = (d) => d
+  ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  : '—';
 
 const STATUS_LABEL = {
   DRAFT:             { cls: 'mk-pill',              label: 'Draft' },
@@ -163,9 +166,13 @@ function JobCard({ order, onAccept, accepting, isMyJob, isBusy }) {
           {!isMyJob && (
             <div style={{ marginTop: 5, fontSize: 12, color: 'var(--ink-soft)' }}>
               Pemesan: <strong>{order.user_name}</strong>
-              {order.user_phone && <span style={{ color: 'var(--ink-mute)' }}> · {order.user_phone}</span>}
             </div>
           )}
+          {/* Order creation time */}
+          <div className="mk-row" style={{ gap: 5, marginTop: 5, fontSize: 12, color: 'var(--ink-mute)' }}>
+            <Icon name="clock" size={12} />
+            Masuk: {fmtDatetime(order.created_at)}
+          </div>
         </div>
 
         <div style={{ textAlign: 'right', flexShrink: 0 }}>

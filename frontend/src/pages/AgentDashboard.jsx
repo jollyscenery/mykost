@@ -120,11 +120,16 @@ function StatusPill({ status }) {
   return <span className={cfg.cls}>{cfg.label}</span>;
 }
 
+const fmtDatetime = (d) => d
+  ? new Date(d).toLocaleString('id-ID', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  : '—';
+
 function JobCard({ order, onAccept, accepting, onView, isMyOrder, isBusy }) {
   return (
     <article className="mk-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="mk-row" style={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Location breadcrumb */}
           <div className="mk-row" style={{ gap: 6, color: 'var(--ink-mute)', fontSize: 12, marginBottom: 5 }}>
             <Icon name="map-pin" size={13} />
             {[order.kecamatan, order.kota].filter(Boolean).join(', ')}
@@ -135,10 +140,18 @@ function JobCard({ order, onAccept, accepting, onView, isMyOrder, isBusy }) {
           }}>
             {order.kost_name}
           </h3>
+          {/* Full address */}
+          {order.address && (
+            <div className="mk-row" style={{ gap: 5, marginTop: 4, fontSize: 12, color: 'var(--ink-soft)' }}>
+              <Icon name="home" size={12} style={{ flexShrink: 0, color: 'var(--ink-mute)' }} />
+              <span style={{ wordBreak: 'break-word' }}>{order.address}</span>
+            </div>
+          )}
+          {/* Client name only — no phone on card */}
           <div style={{ marginTop: 6, fontSize: 13, color: 'var(--ink-soft)' }}>
             Klien: <strong style={{ color: 'var(--ink)' }}>{order.user_name}</strong>
-            {order.user_phone && <span style={{ color: 'var(--ink-mute)' }}> · {order.user_phone}</span>}
           </div>
+          {/* Notes */}
           {order.notes && (
             <div style={{
               marginTop: 8, padding: '8px 11px',
@@ -149,8 +162,13 @@ function JobCard({ order, onAccept, accepting, onView, isMyOrder, isBusy }) {
               "{order.notes}"
             </div>
           )}
+          {/* Deadline / created timestamp */}
+          <div className="mk-row" style={{ gap: 5, marginTop: 6, fontSize: 12, color: 'var(--ink-mute)' }}>
+            <Icon name="clock" size={12} />
+            Masuk: {fmtDatetime(order.created_at)}
+          </div>
           {isMyOrder && order.status === 'assigned' && (
-            <div className="mk-row" style={{ gap: 6, marginTop: 8, fontSize: 12, color: 'var(--ok)', fontWeight: 600 }}>
+            <div className="mk-row" style={{ gap: 6, marginTop: 6, fontSize: 12, color: 'var(--ok)', fontWeight: 600 }}>
               <Icon name="camera" size={13} />
               Perlu kirim hasil survei
             </div>

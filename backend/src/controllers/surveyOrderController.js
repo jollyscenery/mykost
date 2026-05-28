@@ -41,7 +41,14 @@ async function createOrder(req, res) {
 
 async function getUserOrders(req, res) {
   const result = await pool.query(
-    `SELECT so.*, u.name AS agent_name, u.phone AS agent_phone
+    `SELECT so.*,
+        u.name       AS agent_name,
+        u.phone      AS agent_phone,
+        u.avatar_url AS agent_avatar_url,
+        (SELECT ROUND(AVG(r.rating)::numeric, 1)
+         FROM reviews r WHERE r.reviewee_id = so.agent_id) AS agent_rating,
+        (SELECT COUNT(*)
+         FROM reviews r WHERE r.reviewee_id = so.agent_id) AS agent_rating_count
      FROM survey_orders so
      LEFT JOIN users u ON u.id = so.agent_id
      WHERE so.user_id = $1
