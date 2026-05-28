@@ -264,6 +264,7 @@ export default function AgentDashboard() {
   const [available, setAvailable] = useState([]);
   const [myOrders, setMyOrders] = useState([]);
   const [commissions, setCommissions] = useState([]);
+  const [commissionRate, setCommissionRate] = useState(0.10);
   const [noKota, setNoKota] = useState(false);
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -284,6 +285,7 @@ export default function AgentDashboard() {
       setOffline(a.data.offline || false);
       setMyOrders(m.data.orders);
       setCommissions(c.data.list || []);
+      setCommissionRate(c.data.commission_rate ?? 0.10);
     } catch {}
     setLoading(false);
   }, []);
@@ -412,9 +414,9 @@ export default function AgentDashboard() {
           <div className="mk-stat-sub">perlu hasil survei</div>
         </div>
         <div className="mk-stat">
-          <div className="mk-stat-label">Komisi bulan ini</div>
+          <div className="mk-stat-label">Pendapatan bersih</div>
           <div className="mk-stat-value" style={{ color: 'var(--brand)' }}>{rp(totalComm)}</div>
-          <div className="mk-stat-sub">{doneCount} selesai</div>
+          <div className="mk-stat-sub">setelah komisi {Math.round(commissionRate * 100)}%</div>
         </div>
       </div>
 
@@ -543,10 +545,13 @@ export default function AgentDashboard() {
               padding: 20, background: 'var(--brand)', border: 'none', color: '#fff',
             }}>
               <div style={{ fontSize: 12, fontWeight: 700, opacity: .85, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 6 }}>
-                Total Estimasi Komisi
+                Total Pendapatan Bersih
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 800, letterSpacing: '-.02em' }}>
                 {rp(totalComm)}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, opacity: .8 }}>
+                Setelah komisi platform {Math.round(commissionRate * 100)}% per order
               </div>
               {ratingSummary && ratingSummary.count > 0 && (
                 <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, opacity: .9 }}>
@@ -574,15 +579,17 @@ export default function AgentDashboard() {
                     <div style={{ fontSize: 12, color: 'var(--ink-mute)', marginTop: 2 }}>
                       {comm.date ? new Date(comm.date).toLocaleDateString('id-ID') : '—'}
                     </div>
-                    <div style={{ fontSize: 12, marginTop: 2 }}>
-                      Status:{' '}
-                      <strong style={{ color: comm.status === 'Paid' ? 'var(--ok)' : 'var(--warn)' }}>
-                        {comm.status}
-                      </strong>
-                    </div>
+                    {comm.gross_amount != null && (
+                      <div style={{ fontSize: 11, color: 'var(--ink-mute)', marginTop: 3 }}>
+                        Bruto {rp(comm.gross_amount)} &minus; komisi {rp(comm.commission)}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--brand)' }}>
-                    +{rp(comm.amount)}
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--brand)' }}>
+                      +{rp(comm.amount)}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--ok)', marginTop: 2 }}>Masuk wallet</div>
                   </div>
                 </div>
               ))

@@ -2,6 +2,7 @@ const Joi  = require('joi');
 const pool = require('../db/pool');
 const notify = require('../utils/notify');
 const { creditWallet } = require('./walletController');
+const { calculateCommission, PLATFORM_COMMISSION_RATE } = require('../utils/commission');
 const {
   calculatePrice,
   determineRequiresReview,
@@ -314,29 +315,34 @@ async function getEarnings(req, res) {
   // supaya jobs yang dibuat bulan lalu & selesai bulan ini masuk ke bulan ini.
   const summary = await pool.query(
     `SELECT
-       COUNT(*) FILTER (WHERE status = 'COMPLETED')                       AS completed_count,
-       COUNT(*) FILTER (WHERE status IN ('ACCEPTED','ON_GOING'))          AS in_progress_count,
-       COALESCE(SUM(estimated_price) FILTER (WHERE status = 'COMPLETED'), 0)::int AS total_earned,
-       COALESCE(SUM(estimated_price) FILTER (
-         WHERE status = 'COMPLETED'
-           AND COALESCE(completed_at, updated_at) >= date_trunc('month', NOW())
-       ), 0)::int AS this_month,
-       COALESCE(SUM(estimated_price) FILTER (
-         WHERE status IN ('ACCEPTED','ON_GOING')
-       ), 0)::int AS pending_amount
-     FROM moving_orders WHERE mover_id = $1`,
+       COUNT(*) FILTER (WHERE mo.status = 'COMPLETED')                       AS completed_count,
+       COUNT(*) FILTER (WHERE mo.status IN ('ACCEPTED','ON_GOING'))          AS in_progress_count,
+       COALESCE(SUM(mo.estimated_price) FILTER (WHERE mo.status = 'COMPLETED'), 0)::int AS total_gross,
+       COALESCE(SUM(mo.estimated_price) FILTER (
+         WHERE mo.status = 'COMPLETED'
+           AND COALESCE(mo.completed_at, mo.updated_at) >= date_trunc('month', NOW())
+       ), 0)::int AS this_month_gross,
+       COALESCE(SUM(mo.estimated_price) FILTER (
+         WHERE mo.status IN ('ACCEPTED','ON_GOING')
+       ), 0)::int AS pending_amount,
+       COALESCE(SUM(pr.commission) FILTER (WHERE mo.status = 'COMPLETED'), 0)::int AS total_commission
+     FROM moving_orders mo
+     LEFT JOIN platform_revenue pr ON pr.order_id = mo.id::text AND pr.order_type = 'moving'
+     WHERE mo.mover_id = $1`,
     [req.user.id]
   );
 
   const byMonth = await pool.query(
     `SELECT
-       TO_CHAR(date_trunc('month', COALESCE(completed_at, updated_at)), 'YYYY-MM') AS month,
-       COUNT(*)::int                                                                AS count,
-       COALESCE(SUM(estimated_price), 0)::int                                       AS total
-     FROM moving_orders
-     WHERE mover_id = $1 AND status = 'COMPLETED'
-     GROUP BY date_trunc('month', COALESCE(completed_at, updated_at))
-     ORDER BY date_trunc('month', COALESCE(completed_at, updated_at)) DESC
+       TO_CHAR(date_trunc('month', COALESCE(mo.completed_at, mo.updated_at)), 'YYYY-MM') AS month,
+       COUNT(*)::int                                                                       AS count,
+       COALESCE(SUM(mo.estimated_price), 0)::int                                          AS total_gross,
+       COALESCE(SUM(pr.commission), 0)::int                                               AS total_commission
+     FROM moving_orders mo
+     LEFT JOIN platform_revenue pr ON pr.order_id = mo.id::text AND pr.order_type = 'moving'
+     WHERE mo.mover_id = $1 AND mo.status = 'COMPLETED'
+     GROUP BY date_trunc('month', COALESCE(mo.completed_at, mo.updated_at))
+     ORDER BY date_trunc('month', COALESCE(mo.completed_at, mo.updated_at)) DESC
      LIMIT 12`,
     [req.user.id]
   );
@@ -345,18 +351,47 @@ async function getEarnings(req, res) {
     `SELECT mo.id, mo.pickup_location, mo.dropoff_location, mo.distance_km,
             mo.estimated_price, mo.status,
             COALESCE(mo.completed_at, mo.updated_at) AS completed_at,
-            u.name AS user_name
+            u.name AS user_name,
+            pr.commission, pr.rate AS commission_rate
      FROM moving_orders mo
      JOIN users u ON u.id = mo.user_id
+     LEFT JOIN platform_revenue pr ON pr.order_id = mo.id::text AND pr.order_type = 'moving'
      WHERE mo.mover_id = $1 AND mo.status = 'COMPLETED'
      ORDER BY COALESCE(mo.completed_at, mo.updated_at) DESC LIMIT 10`,
     [req.user.id]
   );
 
+  const s = summary.rows[0];
+  const totalGross = parseInt(s.total_gross || 0);
+  const totalCommission = parseInt(s.total_commission || 0);
+  const thisMonthGross = parseInt(s.this_month_gross || 0);
+  const thisMonthCommission = Math.round(thisMonthGross * PLATFORM_COMMISSION_RATE);
+
+  const recentWithNet = recent.rows.map((row) => {
+    const gross = parseInt(row.estimated_price || 0);
+    const commission = row.commission !== null ? parseInt(row.commission) : Math.round(gross * PLATFORM_COMMISSION_RATE);
+    return { ...row, commission, net_amount: gross - commission };
+  });
+
+  const byMonthWithNet = byMonth.rows.map((row) => {
+    const gross = parseInt(row.total_gross || 0);
+    const commission = parseInt(row.total_commission || 0) || Math.round(gross * PLATFORM_COMMISSION_RATE);
+    return { ...row, total: gross - commission, total_gross: gross, total_commission: commission };
+  });
+
   res.json({
-    summary: summary.rows[0],
-    by_month: byMonth.rows,
-    recent_completed: recent.rows,
+    commission_rate: PLATFORM_COMMISSION_RATE,
+    summary: {
+      ...s,
+      total_earned: totalGross - totalCommission,
+      total_gross: totalGross,
+      total_commission: totalCommission,
+      this_month: thisMonthGross - thisMonthCommission,
+      this_month_gross: thisMonthGross,
+      this_month_commission: thisMonthCommission,
+    },
+    by_month: byMonthWithNet,
+    recent_completed: recentWithNet,
   });
 }
 
@@ -700,22 +735,55 @@ async function updateOrderStatus(req, res) {
   const finalPriceUpdate = value.status === 'COMPLETED' ? order.estimated_price : null;
   const completedAtUpdate = value.status === 'COMPLETED' ? new Date() : null;
 
-  const updated = await pool.query(
-    `UPDATE moving_orders
-     SET status = $1,
-         final_price = COALESCE($2, final_price),
-         completed_at = COALESCE($3, completed_at),
-         updated_at = NOW()
-     WHERE id = $4
-     RETURNING *`,
-    [value.status, finalPriceUpdate, completedAtUpdate, id]
-  );
+  const client = await pool.connect();
+  let updated;
+  try {
+    await client.query('BEGIN');
 
-  await pool.query(
-    `INSERT INTO moving_order_status_history (order_id, from_status, to_status, note, changed_by)
-     VALUES ($1,$2,$3,$4,$5)`,
-    [id, order.status, value.status, value.note || null, req.user.id]
-  );
+    updated = await client.query(
+      `UPDATE moving_orders
+       SET status = $1,
+           final_price = COALESCE($2, final_price),
+           completed_at = COALESCE($3, completed_at),
+           updated_at = NOW()
+       WHERE id = $4
+       RETURNING *`,
+      [value.status, finalPriceUpdate, completedAtUpdate, id]
+    );
+
+    await client.query(
+      `INSERT INTO moving_order_status_history (order_id, from_status, to_status, note, changed_by)
+       VALUES ($1,$2,$3,$4,$5)`,
+      [id, order.status, value.status, value.note || null, req.user.id]
+    );
+
+    // Credit wallet mover setelah potong komisi platform
+    if (value.status === 'COMPLETED') {
+      const gross = parseInt(order.estimated_price || 0);
+      if (gross > 0) {
+        const { commission, netAmount, rate } = calculateCommission(gross);
+
+        await creditWallet(
+          client, order.mover_id, netAmount,
+          'moving_earnings', id,
+          `Pendapatan pindahan (setelah komisi platform ${Math.round(rate * 100)}%)`
+        );
+
+        await client.query(
+          `INSERT INTO platform_revenue (order_type, order_id, gross_amount, commission, rate)
+           VALUES ('moving', $1, $2, $3, $4)`,
+          [id, gross, commission, rate]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 
   // Kirim notifikasi ke user
   const statusMessages = {

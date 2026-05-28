@@ -330,6 +330,7 @@ export default function MoverDashboard() {
   };
 
   const summary = earnings?.summary || {};
+  const commissionRate = earnings?.commission_rate ?? 0.10;
   const isAvailable = user?.is_available !== false;
   const isBusy      = isAvailable && myJobs.some((j) => ['ACCEPTED', 'ON_GOING'].includes(j.status));
   const activeJobs  = myJobs.filter((j) => !MOVER_HISTORY_STATUS.includes(j.status));
@@ -430,10 +431,13 @@ export default function MoverDashboard() {
         display: 'flex', flexDirection: 'column', gap: 10,
       }}>
         <div style={{ fontSize: 12, fontWeight: 700, opacity: .85, textTransform: 'uppercase', letterSpacing: '.04em' }}>
-          Penghasilan bulan ini
+          Penghasilan bersih bulan ini
         </div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 800, letterSpacing: '-.02em' }}>
           {rp(summary.this_month)}
+        </div>
+        <div style={{ fontSize: 11, opacity: .75, marginTop: -4 }}>
+          Setelah komisi platform {Math.round(commissionRate * 100)}%
         </div>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12, opacity: .9 }}>
@@ -467,8 +471,9 @@ export default function MoverDashboard() {
           <div className="mk-stat-sub">hari ini</div>
         </div>
         <div className="mk-stat">
-          <div className="mk-stat-label">Total penghasilan</div>
+          <div className="mk-stat-label">Total bersih</div>
           <div className="mk-stat-value" style={{ color: 'var(--brand)', fontSize: 22 }}>{rp(summary.total_earned)}</div>
+          <div className="mk-stat-sub">masuk wallet</div>
         </div>
       </div>
 
@@ -578,6 +583,9 @@ export default function MoverDashboard() {
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 14 }}>{fmtMonth(m.month)}</div>
                         <div style={{ fontSize: 12, color: 'var(--ink-mute)', marginTop: 2 }}>{m.count} job</div>
+                        {m.total_commission > 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--ink-mute)' }}>Bruto {rp(m.total_gross)} &minus; komisi {rp(m.total_commission)}</div>
+                        )}
                       </div>
                       <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--brand)' }}>
                         {rp(m.total)}
@@ -619,8 +627,11 @@ export default function MoverDashboard() {
                           {j.user_name} · {j.distance_km} km · {fmt(j.created_at)}
                         </div>
                       </div>
-                      <div style={{ fontWeight: 700, color: 'var(--ok)', whiteSpace: 'nowrap', marginLeft: 12 }}>
-                        +{rp(j.estimated_price)}
+                      <div style={{ textAlign: 'right', whiteSpace: 'nowrap', marginLeft: 12 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--ok)' }}>+{rp(j.net_amount ?? j.estimated_price)}</div>
+                        {j.commission != null && (
+                          <div style={{ fontSize: 10, color: 'var(--ink-mute)' }}>komisi &minus;{rp(j.commission)}</div>
+                        )}
                       </div>
                     </div>
                   ))}
